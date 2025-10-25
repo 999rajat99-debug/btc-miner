@@ -25,7 +25,7 @@ try {
 // ✅ Initialize Firebase
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://newsignup-default-rtdb.firebaseio.com/"
+  databaseURL: "https://newsignup-default-rtdb.asia-southeast1.firebasedatabase.app/"
 });
 
 const db = admin.database();
