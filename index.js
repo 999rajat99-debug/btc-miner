@@ -1,14 +1,28 @@
 import express from "express";
 import admin from "firebase-admin";
-import dotenv from "dotenv";
 
-dotenv.config();
+// Try to load dotenv safely
+try {
+  const dotenv = await import("dotenv");
+  dotenv.config();
+  console.log("✅ dotenv loaded successfully");
+} catch (err) {
+  console.warn("⚠️ dotenv not found, using Render environment variables only");
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Parse Firebase credentials from environment variable
-const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
+// Safely parse Firebase credentials
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
+} catch (err) {
+  console.error("❌ Invalid or missing FIREBASE_CREDENTIALS");
+  process.exit(1);
+}
 
+// Initialize Firebase
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: "https://newsignup-default-rtdb.firebaseio.com/"
@@ -27,7 +41,7 @@ app.get("/addspeed/:uid", async (req, res) => {
   const { uid } = req.params;
   const { amount, token } = req.query;
 
-  // 🔒 Security check
+  // 🔒 Token protection
   if (token !== ADD_SPEED_SECRET) {
     return res.status(403).json({ error: "Forbidden: Invalid token" });
   }
@@ -47,10 +61,9 @@ app.get("/addspeed/:uid", async (req, res) => {
     const currentSpeed = snapshot.val().speed_ghs || 0;
     const newSpeed = currentSpeed + Number(amount);
 
-    // Update speed
     await userRef.update({ speed_ghs: newSpeed });
 
-    // Log this action
+    // Log activity
     const logRef = db.ref("logs").child(uid);
     await logRef.push({
       timestamp: new Date().toISOString(),
@@ -87,7 +100,7 @@ app.get("/status", async (req, res) => {
   }
 });
 
-// Start the server
+// ✅ Start Server
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
