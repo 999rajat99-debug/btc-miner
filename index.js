@@ -72,32 +72,26 @@ app.get("/addspeed/:uid", async (req, res) => {
 // ===================================================================
 app.get("/getuser/:uid", async (req, res) => {
   const uid = req.params.uid;
+  const ref = db.ref("users/" + uid);
 
   try {
-    const userRef = db.ref("users/" + uid);
-    const snapshot = await userRef.once("value");
+    const snapshot = await ref.once("value");
+    if (snapshot.exists()) {
+      // ✅ User already exists
+      res.json(snapshot.val());
+    } else {
+      // 🆕 User doesn’t exist, create it automatically
+      const defaultData = {
+        balance: 0,
+        speed: 0,
+        createdAt: new Date().toISOString()
+      };
 
-    if (!snapshot.exists()) {
-      return res.status(404).json({ error: "User not found" });
+      await ref.set(defaultData);
+      res.json(defaultData);
     }
-
-    const userData = snapshot.val();
-    res.json({
-      success: true,
-      uid,
-      data: userData
-    });
-
   } catch (error) {
-    console.error("❌ Error fetching user data:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error in /getuser:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
-});
-
-
-// ===================================================================
-// ✅ Start Server
-// ===================================================================
-app.listen(port, () => {
-  console.log(`🚀 Server running on port ${port}`);
 });
