@@ -13,7 +13,7 @@ const serviceAccount = JSON.parse(process.env.FIREBASE_CREDENTIALS);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://newsignup-default-rtdb.asia-southeast1.firebasedatabase.app" // <-- Use your correct Firebase URL here
+  databaseURL: "https://newsiginup-default-rtdb.firebaseio.com/" // <-- Use your correct Firebase URL here
 });
 
 const db = admin.database();
