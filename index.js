@@ -20,7 +20,7 @@ const firebaseConfig = JSON.parse(process.env.FIREBASE_CREDENTIALS);
 
 admin.initializeApp({
   credential: admin.credential.cert(firebaseConfig),
-  databaseURL: firebaseConfig.databaseURL
+  databaseURL: "https://newsiginup-default-rtdb.firebaseio.com/"
 });
 
 const db = admin.database();
