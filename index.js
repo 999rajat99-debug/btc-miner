@@ -41,32 +41,20 @@ app.get("/", (req, res) => {
 });
 
 
-// 🟢 GET USER (Auto-create if not exists)
+// AUTO CREATE USER IF NOT FOUND
 app.get("/getuser/:uid", async (req, res) => {
+  const { uid } = req.params;
   try {
-    const uid = req.params.uid;
-    const ref = db.ref("users/" + uid);
-
-    const snapshot = await ref.once("value");
-
-    if (snapshot.exists()) {
-      // ✅ Existing user found
-      return res.json(snapshot.val());
-    } else {
-      // 🆕 Create a new user record
-      const defaultData = {
-        balance: 0,
-        speed: 0,
-        createdAt: new Date().toISOString()
-      };
-
-      await ref.set(defaultData);
-      console.log(`✅ New user created: ${uid}`);
-      return res.json(defaultData);
+    const snapshot = await db.ref(`users/${uid}`).once("value");
+    if (!snapshot.exists()) {
+      // create new user record
+      await db.ref(`users/${uid}`).set({ balance: 0, speed: 0 });
+      return res.json({ data: { uid, balance: 0, speed: 0 }, created: true });
     }
-  } catch (error) {
-    console.error("❌ Error in /getuser:", error);
-    res.status(500).json({ error: "Internal Server Error", details: error.message });
+    const data = snapshot.val();
+    return res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
