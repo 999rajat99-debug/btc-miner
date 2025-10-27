@@ -108,3 +108,66 @@ app.post("/updatebalance/:uid", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+// ✅ 3️⃣ Auto-sync balance from app
+app.post("/syncbalance/:uid", async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    const { balance, speed } = req.body;
+
+    const userRef = db.ref(`users/${uid}`);
+    const snapshot = await userRef.get();
+
+    if (!snapshot.exists()) {
+      await userRef.set({
+        balance: balance || 0,
+        speed: speed || 0,
+        createdAt: Date.now()
+      });
+      return res.json({ message: "User created and balance synced" });
+    }
+
+    await userRef.update({ balance, speed });
+    res.json({ message: "Balance synced successfully" });
+  } catch (error) {
+    console.error("Error syncing balance:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+// ✅ 2️⃣ Add speed securely with rate limiting
+const lastAddTime = new Map();
+
+app.get("/addspeed/:uid", async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    const token = req.query.token;
+
+    if (token !== ADD_SPEED_SECRET) {
+      return res.status(403).json({ error: "Forbidden: Invalid token" });
+    }
+
+    const now = Date.now();
+    const lastTime = lastAddTime.get(uid) || 0;
+    if (now - lastTime < 10000) {
+      return res.status(429).json({ error: "Wait 10 seconds before next speed add" });
+    }
+    lastAddTime.set(uid, now);
+
+    const userRef = db.ref(`users/${uid}`);
+    const snapshot = await userRef.get();
+
+    if (!snapshot.exists()) {
+      await userRef.set({ speed: 5, balance: 0, createdAt: Date.now() });
+      return res.json({ newSpeed: 5, message: "User created and speed added" });
+    }
+
+    const userData = snapshot.val();
+    const currentSpeed = userData.speed || 0;
+    const newSpeed = currentSpeed + 5;
+
+    await userRef.update({ speed: newSpeed });
+    return res.json({ newSpeed, message: "Speed added successfully" });
+  } catch (error) {
+    console.error("Error in /addspeed:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
