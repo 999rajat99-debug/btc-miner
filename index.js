@@ -1,103 +1,110 @@
-// ==========================
-// ✅ BTC Miner Backend Server
-// ==========================
-
-// Imports
 import express from "express";
-import bodyParser from "body-parser";
-import dotenv from "dotenv";
+import cors from "cors";
 import admin from "firebase-admin";
 
-// Initialize dotenv
-dotenv.config();
+// Environment variable (from Render Dashboard)
+const firebaseCredentials = JSON.parse(process.env.FIREBASE_CREDENTIALS);
 
-// Create Express app
-const app = express();
-app.use(bodyParser.json());
-
-// Firebase Admin SDK Initialization
-const firebaseConfig = JSON.parse(process.env.FIREBASE_CREDENTIALS);
-
+// Initialize Firebase Admin SDK
 admin.initializeApp({
-  credential: admin.credential.cert(firebaseConfig),
+  credential: admin.credential.cert(firebaseCredentials),
   databaseURL: "https://newsiginup-default-rtdb.firebaseio.com/"
 });
 
 const db = admin.database();
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-// Secret key for secure speed addition
-const ADD_SPEED_SECRET = process.env.ADD_SPEED_SECRET || "changeme";
-
-// Default port for Render
+const ADD_SPEED_SECRET = process.env.ADD_SPEED_SECRET || "default_secret";
 const PORT = process.env.PORT || 10000;
 
-// ==========================
-// ✅ ROUTES
-// ==========================
-
-// 🟢 Root Route (for testing)
+// ✅ Root route for testing
 app.get("/", (req, res) => {
-  res.send("✅ BTC Miner Backend is live!");
+  res.json({ message: "BTC Miner Backend is Live 🚀" });
 });
 
-
-// AUTO CREATE USER IF NOT FOUND
+// ✅ 1️⃣ Get user info or auto-create new user
 app.get("/getuser/:uid", async (req, res) => {
-  const { uid } = req.params;
   try {
-    const snapshot = await db.ref(`users/${uid}`).once("value");
+    const uid = req.params.uid;
+    const userRef = db.ref(`users/${uid}`);
+    const snapshot = await userRef.get();
+
     if (!snapshot.exists()) {
-      // create new user record
-      await db.ref(`users/${uid}`).set({ balance: 0, speed: 0 });
-      return res.json({ data: { uid, balance: 0, speed: 0 }, created: true });
+      // Auto-create user if not found
+      const newUser = {
+        speed: 0,
+        balance: 0,
+        createdAt: Date.now()
+      };
+      await userRef.set(newUser);
+      return res.json({ data: newUser });
     }
-    const data = snapshot.val();
-    return res.json({ data });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
+    // Return existing user data
+    return res.json({ data: snapshot.val() });
 
-// 🟢 ADD SPEED (Secure route with token)
-app.get("/addspeed/:uid", async (req, res) => {
-  const { uid } = req.params;
-  const { token } = req.query;
-
-  if (token !== ADD_SPEED_SECRET) {
-    return res.status(403).json({ error: "Forbidden: Invalid token" });
-  }
-
-  try {
-    const ref = db.ref("users/" + uid);
-    const snapshot = await ref.once("value");
-
-    let user = snapshot.exists()
-      ? snapshot.val()
-      : { balance: 0, speed: 0, createdAt: new Date().toISOString() };
-
-    // Increase speed by 5 GH/s
-    user.speed = (user.speed || 0) + 5;
-    await ref.set(user);
-
-    console.log(`⚡ Speed increased for user: ${uid} → ${user.speed} GH/s`);
-    res.json({ newSpeed: user.speed });
   } catch (error) {
-    console.error("❌ Error in /addspeed:", error);
-    res.status(500).json({ error: "Internal Server Error", details: error.message });
+    console.error("Error in /getuser:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
+// ✅ 2️⃣ Add speed securely
+app.get("/addspeed/:uid", async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    const token = req.query.token;
 
-// 🟢 Simple health-check endpoint
-app.get("/status", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+    if (token !== ADD_SPEED_SECRET) {
+      return res.status(403).json({ error: "Forbidden: Invalid token" });
+    }
+
+    const userRef = db.ref(`users/${uid}`);
+    const snapshot = await userRef.get();
+
+    if (!snapshot.exists()) {
+      // Auto-create user if missing
+      await userRef.set({ speed: 5, balance: 0, createdAt: Date.now() });
+      return res.json({ newSpeed: 5, message: "User created and speed added" });
+    }
+
+    const userData = snapshot.val();
+    const currentSpeed = userData.speed || 0;
+    const newSpeed = currentSpeed + 5;
+
+    await userRef.update({ speed: newSpeed });
+
+    return res.json({
+      message: "Speed added successfully",
+      newSpeed
+    });
+
+  } catch (error) {
+    console.error("Error in /addspeed:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
 
+// ✅ 3️⃣ Update balance (optional, for future use)
+app.post("/updatebalance/:uid", async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    const { balance } = req.body;
 
-// ==========================
-// ✅ START SERVER
-// ==========================
-app.listen(PORT, "0.0.0.0", () => {
+    const userRef = db.ref(`users/${uid}`);
+    await userRef.update({ balance });
+
+    return res.json({ message: "Balance updated successfully" });
+
+  } catch (error) {
+    console.error("Error in /updatebalance:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ Start the server
+app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
