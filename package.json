@@ -1,19 +1,16 @@
 {
   "type": "module",
-  "name": "nodejs",
+  "name": "btc-miner-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "BTC miner backend for Kodular app using Firebase",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@types/node": "^22.13.11",
-    "express": "^5.1.0",
-    "firebase-admin": "^13.5.0",
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "firebase-admin": "^12.1.1",
     "dotenv": "^16.3.1"
   }
 }
