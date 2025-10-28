@@ -50,6 +50,43 @@ app.get("/getuser/:uid", async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
+app.get('/getuser/:uid', async (req, res) => {
+  const uid = req.params.uid;
+  const userRef = db.ref(`users/${uid}`);
+  const snapshot = await userRef.once('value');
+
+  if (!snapshot.exists()) {
+    return res.json({ error: 'User not found' });
+  }
+
+  const user = snapshot.val();
+  const now = Date.now();
+
+  // --- Cloud mining update ---
+  if (user.lastUpdate && user.speed && user.speed > 0) {
+    const secondsPassed = Math.floor((now - user.lastUpdate) / 1000);
+    const mined = user.speed * 0.000000000000002 * secondsPassed; // same btc_per_ghs rate
+    user.balance += mined;
+  }
+
+  // --- Reset at midnight (optional) ---
+  const date = new Date();
+  if (date.getHours() === 0 && date.getMinutes() === 0) {
+    user.speed = 0;
+  }
+
+  // Update DB with new values
+  await userRef.update({
+    balance: user.balance,
+    lastUpdate: now,
+    speed: user.speed
+  });
+
+  return res.json({
+    balance: user.balance,
+    speed: user.speed,
+  });
+});
 
 // ✅ 2️⃣ Add speed securely
 app.get("/addspeed/:uid", async (req, res) => {
