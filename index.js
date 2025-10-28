@@ -146,30 +146,27 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
 // ✅ 3️⃣ Auto-sync balance from app
-app.post("/syncbalance/:uid", async (req, res) => {
+app.post('/syncbalance/:uid', async (req, res) => {
   try {
     const uid = req.params.uid;
-    const { balance, speed } = req.body;
+    const balance = req.body.balance;
+    const speed = req.body.speed;
 
-    const userRef = db.ref(`users/${uid}`);
-    const snapshot = await userRef.get();
+    const userRef = db.ref('users/' + uid);
 
-    if (!snapshot.exists()) {
-      await userRef.set({
-        balance: balance || 0,
-        speed: speed || 0,
-        createdAt: Date.now()
-      });
-      return res.json({ message: "User created and balance synced" });
-    }
+    await userRef.update({
+      balance: balance,
+      speed: speed,
+      lastUpdate: Date.now()  // 👈 this line is new
+    });
 
-    await userRef.update({ balance, speed });
-    res.json({ message: "Balance synced successfully" });
+    res.json({ status: 'ok', message: 'Sync complete' });
   } catch (error) {
-    console.error("Error syncing balance:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Sync error:', error);
+    res.status(500).json({ error: 'Failed to sync data' });
   }
 });
+
 // ✅ 2️⃣ Add speed securely with rate limiting
 const lastAddTime = new Map();
 
