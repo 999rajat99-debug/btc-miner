@@ -1,5 +1,4 @@
 {
-  "type": "module",
   "name": "btc-miner-backend",
   "version": "1.0.0",
   "description": "BTC miner backend for Kodular app using Firebase",
