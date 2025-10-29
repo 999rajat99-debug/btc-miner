@@ -27,7 +27,7 @@ const serviceAccount = {
 };
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://newsignup-default-rtdb.firebaseio.com/" // ✅ your Firebase URL
+  databaseURL: "https://newsiginup-default-rtdb.firebaseio.com/" // ✅ your Firebase URL
 });
 
 const db = admin.database();
