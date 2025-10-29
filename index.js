@@ -47,35 +47,41 @@ app.get("/", (req, res) => {
 });
 
 // =============================
-// ADD SPEED (called when user clicks Watch Ad / Get Speed)
-// =============================
+// ✅ Add Speed Route
 app.get("/addspeed/:uid", async (req, res) => {
   try {
     const uid = req.params.uid;
-    const token = req.query.token;
+    if (!uid) {
+      return res.status(400).json({ error: "UID missing in request" });
+    }
 
-    if (!uid) return res.status(400).json({ error: "Missing UID" });
-
+    // Reference to user's data in Firebase
     const userRef = db.ref(`users/${uid}`);
+
+    // Get existing data
     const snapshot = await userRef.once("value");
+    const userData = snapshot.val() || { balance: 0, speed: 0 };
 
-    let user = snapshot.val() || { balance: 0, speed: 0, lastUpdate: Date.now() };
+    // Add +5 GH/s to the current speed
+    const newSpeed = (userData.speed || 0) + 5;
 
-    // Increase mining speed by +5 GH/s
-    user.speed = (user.speed || 0) + 5;
-    user.lastUpdate = Date.now();
-
+    // Update speed in database
     await userRef.update({
-      speed: user.speed,
-      lastUpdate: user.lastUpdate
+      speed: newSpeed,
+      lastUpdate: Date.now(),
     });
 
-    console.log(`[ADDSPEED] ${uid} speed updated to ${user.speed} GH/s`);
-    res.json({ newSpeed: user.speed });
+    console.log(`Speed updated for UID: ${uid} → ${newSpeed} GH/s`);
 
+    // Send response in JSON format (so Kodular can decode)
+    return res.json({
+      status: "success",
+      newSpeed: newSpeed,
+      message: `Speed updated to ${newSpeed} GH/s`,
+    });
   } catch (error) {
-    console.error("❌ AddSpeed Error:", error);
-    res.status(500).json({ error: "Failed to update speed" });
+    console.error("Error in /addspeed:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
