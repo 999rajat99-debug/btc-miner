@@ -120,26 +120,34 @@ app.post("/syncbalance/:uid", async (req, res) => {
   }
 });
 
-// ✅ Midnight Reset (auto run by external CRON later)
+// 🌙 Midnight Reset Route
 app.post("/resetmidnight", async (req, res) => {
   try {
+    const db = admin.database();
     const usersRef = db.ref("users");
+
+    // Fetch all users
     const snapshot = await usersRef.once("value");
+    const users = snapshot.val();
 
-    const updates = {};
-    snapshot.forEach((child) => {
-      updates[`${child.key}/speed`] = 0;
-    });
+    if (users) {
+      for (const uid in users) {
+        await usersRef.child(uid).update({
+          speed: 0,
+          lastReset: Date.now()
+        });
+      }
+    }
 
-    await usersRef.update(updates);
-
-    console.log("🌙 Midnight reset complete — all speeds set to 0 GH/s");
+    console.log("✅ Midnight reset complete at", new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }));
     return res.json({ status: "success", message: "Midnight reset complete" });
+
   } catch (error) {
-    console.error("Error in /resetmidnight:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Midnight reset error:", error);
+    return res.status(500).json({ status: "error", message: error.message });
   }
 });
+
 
 // ✅ Start Server
 const PORT = process.env.PORT || 10000;
