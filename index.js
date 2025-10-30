@@ -93,30 +93,44 @@ app.get("/addspeed/:uid", async (req, res) => {
 app.post("/syncbalance/:uid", async (req, res) => {
   try {
     const uid = req.params.uid;
-    if (!uid) return res.status(400).json({ error: "UID missing" });
-
     const { balance, speed } = req.body;
-    if (balance === undefined || speed === undefined) {
-      return res.status(400).json({ error: "Missing balance or speed" });
-    }
 
-    const userRef = db.ref(`users/${uid}`);
+    const db = admin.database();
+    const userRef = db.ref("users/" + uid);
+    const snapshot = await userRef.once("value");
+    const user = snapshot.val() || {};
+
+    const now = Date.now();
+    const lastUpdate = user.lastUpdate || now;
+
+    // Time difference in seconds
+    const timeDiff = (now - lastUpdate) / 1000;
+
+    // Simulate mining while offline
+    const minedWhileOffline = (user.speed || 0) * 0.00000000000002 * timeDiff;
+
+    const newBalance = (user.balance || 0) + minedWhileOffline;
+
+    // Save everything
     await userRef.update({
-      balance: balance,
-      speed: speed,
-      lastUpdate: Date.now(),
+      balance: balance ?? newBalance,
+      speed: speed ?? user.speed,
+      lastUpdate: now
     });
 
-    console.log(`✅ Synced balance for UID: ${uid}`);
-
+    // ✅ Return all values
     return res.json({
       status: "success",
-      message: "Balance synced successfully",
-      updated: true,
+      minedWhileOffline,
+      newBalance
     });
+
   } catch (error) {
-    console.error("Error in /syncbalance:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Sync Error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: error.message
+    });
   }
 });
 
