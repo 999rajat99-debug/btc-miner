@@ -1,18 +1,15 @@
-// =============================
-// BTC Miner Backend (Cloud Mining Ready)
-// =============================
-
+// ✅ index.js — Final Stable Version
 const express = require("express");
-const bodyParser = require("body-parser");
 const admin = require("firebase-admin");
+const bodyParser = require("body-parser");
 const cors = require("cors");
 
+// ✅ Initialize Express App
 const app = express();
-const PORT = process.env.PORT || 10000;
+app.use(cors());
+app.use(bodyParser.json());
 
-// =============================
-// Firebase Setup
-// =============================
+// ✅ Firebase Configuration (Environment Variables on Render)
 const serviceAccount = {
   type: "service_account",
   project_id: process.env.FIREBASE_PROJECT_ID,
@@ -25,55 +22,62 @@ const serviceAccount = {
   auth_provider_x509_cert_url: process.env.FIREBASE_AUTH_PROVIDER_CERT,
   client_x509_cert_url: process.env.FIREBASE_CLIENT_CERT_URL,
 };
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://newsiginup-default-rtdb.firebaseio.com/" // ✅ your Firebase URL
-});
+
+// ✅ Initialize Firebase Admin SDK
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
+  });
+}
 
 const db = admin.database();
 
-// =============================
-// Middleware
-// =============================
-app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// =============================
-// Root Route
-// =============================
+// ✅ Default Route
 app.get("/", (req, res) => {
-  res.send("🚀 BTC Miner Backend is Running Successfully!");
+  res.send("BTC Miner Backend is Running ✅");
 });
 
-// =============================
-// ✅ Add Speed Route
-app.get("/addspeed/:uid", async (req, res) => {
+// ✅ Get User Info (balance, speed)
+app.get("/getuser/:uid", async (req, res) => {
   try {
     const uid = req.params.uid;
-    if (!uid) {
-      return res.status(400).json({ error: "UID missing in request" });
-    }
+    if (!uid) return res.status(400).json({ error: "UID missing" });
 
-    // Reference to user's data in Firebase
     const userRef = db.ref(`users/${uid}`);
-
-    // Get existing data
     const snapshot = await userRef.once("value");
     const userData = snapshot.val() || { balance: 0, speed: 0 };
 
-    // Add +5 GH/s to the current speed
+    return res.json({
+      status: "success",
+      balance: userData.balance || 0,
+      speed: userData.speed || 0,
+    });
+  } catch (error) {
+    console.error("Error in /getuser:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ✅ Add Speed (+5 GH/s)
+app.get("/addspeed/:uid", async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    if (!uid) return res.status(400).json({ error: "UID missing" });
+
+    const userRef = db.ref(`users/${uid}`);
+    const snapshot = await userRef.once("value");
+    const userData = snapshot.val() || { balance: 0, speed: 0 };
+
     const newSpeed = (userData.speed || 0) + 5;
 
-    // Update speed in database
     await userRef.update({
       speed: newSpeed,
       lastUpdate: Date.now(),
     });
 
-    console.log(`Speed updated for UID: ${uid} → ${newSpeed} GH/s`);
+    console.log(`✅ Speed updated for UID: ${uid} → ${newSpeed} GH/s`);
 
-    // Send response in JSON format (so Kodular can decode)
     return res.json({
       status: "success",
       newSpeed: newSpeed,
@@ -85,112 +89,60 @@ app.get("/addspeed/:uid", async (req, res) => {
   }
 });
 
-// =============================
-// SYNC BALANCE (called every second by Kodular Clock)
-// =============================
+// ✅ Sync Balance (cloud persistence)
 app.post("/syncbalance/:uid", async (req, res) => {
   try {
     const uid = req.params.uid;
-    const { balance, speed } = req.body;
+    if (!uid) return res.status(400).json({ error: "UID missing" });
 
-    if (!uid || balance === undefined || speed === undefined) {
-      return res.status(400).json({ error: "Missing required fields" });
+    const { balance, speed } = req.body;
+    if (balance === undefined || speed === undefined) {
+      return res.status(400).json({ error: "Missing balance or speed" });
     }
 
     const userRef = db.ref(`users/${uid}`);
-
     await userRef.update({
       balance: balance,
       speed: speed,
-      lastUpdate: Date.now() // 👈 saves exact time of last sync
+      lastUpdate: Date.now(),
     });
 
-    console.log(`[SYNC] ${uid} | Balance: ${balance} | Speed: ${speed}`);
-    res.json({ status: "ok", message: "Sync complete" });
+    console.log(`✅ Synced balance for UID: ${uid}`);
 
+    return res.json({
+      status: "success",
+      message: "Balance synced successfully",
+      updated: true,
+    });
   } catch (error) {
-    console.error("❌ Sync Error:", error);
-    res.status(500).json({ error: "Failed to sync data" });
+    console.error("Error in /syncbalance:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// =============================
-// GET USER (fetch + cloud mining auto-update)
-// =============================
-app.get("/getuser/:uid", async (req, res) => {
+// ✅ Midnight Reset (auto run by external CRON later)
+app.post("/resetmidnight", async (req, res) => {
   try {
-    const uid = req.params.uid;
-    const userRef = db.ref(`users/${uid}`);
-    const snapshot = await userRef.once("value");
+    const usersRef = db.ref("users");
+    const snapshot = await usersRef.once("value");
 
-    if (!snapshot.exists()) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    const user = snapshot.val();
-    const now = Date.now();
-
-    user.balance = user.balance || 0;
-    user.speed = user.speed || 0;
-    user.lastUpdate = user.lastUpdate || now;
-
-    // CLOUD MINING CALCULATION
-    if (user.speed > 0) {
-      const secondsPassed = Math.floor((now - user.lastUpdate) / 1000);
-      const btc_per_ghs = 0.000000000000002; // same as in Kodular
-      const mined = user.speed * btc_per_ghs * secondsPassed;
-      user.balance += mined;
-    }
-
-    // MIDNIGHT RESET (optional)
-    const date = new Date();
-    if (date.getHours() === 0 && date.getMinutes() === 0) {
-      user.speed = 0;
-    }
-
-    // Update user data in Firebase
-    await userRef.update({
-      balance: user.balance,
-      speed: user.speed,
-      lastUpdate: now
+    const updates = {};
+    snapshot.forEach((child) => {
+      updates[`${child.key}/speed`] = 0;
     });
 
-    console.log(`[GETUSER] ${uid} | Balance: ${user.balance} | Speed: ${user.speed}`);
-    res.json({
-      balance: user.balance,
-      speed: user.speed,
-      lastUpdate: user.lastUpdate
-    });
+    await usersRef.update(updates);
 
+    console.log("🌙 Midnight reset complete — all speeds set to 0 GH/s");
+    return res.json({ status: "success", message: "Midnight reset complete" });
   } catch (error) {
-    console.error("❌ GetUser Error:", error);
-    res.status(500).json({ error: "Failed to fetch user data" });
+    console.error("Error in /resetmidnight:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// =============================
-// BACKUP (optional daily backup route)
-// =============================
-app.get("/backup", async (req, res) => {
-  try {
-    const snapshot = await db.ref("users").once("value");
-    const data = snapshot.val();
-    const backupRef = db.ref("backups/" + new Date().toISOString());
-    await backupRef.set({
-      backedUpAt: new Date().toISOString(),
-      users: data
-    });
-
-    res.json({ message: "Backup successful" });
-  } catch (error) {
-    console.error("❌ Backup Error:", error);
-    res.status(500).json({ error: "Backup failed" });
-  }
-});
-
-// =============================
-// Start Server
-// =============================
+// ✅ Start Server
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
