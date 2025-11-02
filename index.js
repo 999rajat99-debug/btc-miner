@@ -103,22 +103,21 @@ app.post("/syncbalance/:uid", async (req, res) => {
     const now = Date.now();
     const lastUpdate = user.lastUpdate || now;
 
-    // Time difference in seconds
+    // Calculate offline mined BTC
     const timeDiff = (now - lastUpdate) / 1000;
-
-    // Simulate mining while offline
     const minedWhileOffline = (user.speed || 0) * 0.00000000000002 * timeDiff;
 
-    const newBalance = (user.balance || 0) + minedWhileOffline;
+    // Always compute a valid balance
+    const newBalance = (balance ?? user.balance ?? 0) + minedWhileOffline;
 
-    // Save everything
+    // Save new values
     await userRef.update({
-      balance: balance ?? newBalance,
-      speed: speed ?? user.speed,
+      balance: newBalance,
+      speed: speed ?? user.speed ?? 0,
       lastUpdate: now
     });
 
-    // ✅ Return all values
+    // ✅ Always return all data
     return res.json({
       status: "success",
       minedWhileOffline,
